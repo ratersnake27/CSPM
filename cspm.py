@@ -55,6 +55,7 @@ async def raid(ctx, arg, arg2, arg3, arg4):#arg = gym name, arg2 = pokemon name,
                            "(null, null, " + str(gym_id[1]) + ", "
                            + str(arg3) + ", " + str(pokemon_id) + ", null, null, "
                            "null, null, " + str(time) + ", null);")
+            cursor.execute("INSERT INTO fort_sightings(fort_id, team) VALUES (" + str(gym_id[1]) + ", null);")
             database.commit()
             await bot.say('Successfully added your raid to the live map.')
             await bot.send_message(discord.Object(id=log_channel), str(ctx.message.author.name) + ' said there was a ' + str(arg2) +
