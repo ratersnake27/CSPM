@@ -7,7 +7,7 @@ from config import bot_channel, token, host, user, password, database, website, 
 import datetime
 import calendar
 
-bot = commands.Bot(command_prefix = '.')#set prefix to .
+bot = commands.Bot(command_prefix = '!')#set prefix to !
 
 database = MySQLdb.connect(host,user,password,database)
 
@@ -43,7 +43,7 @@ async def raid(ctx, arg, arg2, arg3, arg4):#arg = gym name, arg2 = pokemon name,
         pokemon_id = find_pokemon_id(str(arg2).capitalize())
         time = get_time(int(arg4))
         try:
-            cursor.execute("SELECT id FROM forts WHERE NAME LIKE '" + str(arg) + "%';")
+            cursor.execute("SELECT id FROM forts WHERE NAME LIKE '%" + str(arg) + "%';")
             gym_id = str(cursor.fetchall())
             gym_id = gym_id.split(',')
             gym_id = gym_id[0].split('((')
@@ -57,13 +57,11 @@ async def raid(ctx, arg, arg2, arg3, arg4):#arg = gym name, arg2 = pokemon name,
                            "null, null, " + str(time) + ", null);")
             cursor.execute("INSERT INTO fort_sightings(fort_id, team) VALUES (" + str(gym_id[1]) + ", null);")
             database.commit()
-            await bot.say('Successfully added your raid to the live map.')
-            await bot.send_message(discord.Object(id=log_channel), str(ctx.message.author.name) + ' said there was a ' + str(arg2) +
-                                   ' raid going on at ' + str(arg)) and print(str(ctx.message.author.name) + ' said there was a ' + str(arg2) +
-                                   ' raid going on at ' + str(arg))
+            await bot.say('Added **' + str(arg2) + '** at the **' + str(arg) + '** gym with **' + str(arg4) + '** minutes left.')
+            await bot.send_message(discord.Object(id=log_channel), str(ctx.message.author.name) + ' reported a **' + str(arg2) + '** raid at **' + str(arg) + '** gym with **' + str(arg4) + '** minutes left.') and print(str(ctx.message.author.name) + ' reported a ' + str(arg2) + ' raid at ' + str(arg) + ' gym with ' + str(arg4) + ' minutes left.')
         except:
             database.rollback()
-            await bot.say('Unsuccesful in database query, your raid was not added to the live map.')
+            await bot.say('Unsuccesful add to the map. !raid "*gym_name*" *pokemon_name* *raid_level* *minutes_left*')
 @bot.command(pass_context=True)
 async def spawn(ctx, arg, arg2, arg3):
     if ctx and ctx.message.channel.id == str(bot_channel) and arg in pokemon:
