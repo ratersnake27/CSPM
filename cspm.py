@@ -109,8 +109,8 @@ async def raid(ctx, arg, arg2, arg3, arg4): #arg = gym name, arg2 = pokemon name
                                    "null, " + str(calendar.timegm(current_time.timetuple())) + ", " + str(remaining_time) + ", null);")
                     await bot.say('Added **Level ' + str(arg3) + ' ' + str(pokemon_name) + '** raid at the **' + str(gym_name) + '** gym with **' + str(arg4) + '** minutes left.')
 
-            # Execute insert into fort_sightings to supress a map error
-            cursor.execute("INSERT INTO fort_sightings(fort_id, team) VALUES (" + str(gym_id) + ", null);")
+            # Execute insert into fort_sightings to track gym team defaults to 0
+            cursor.execute("INSERT INTO fort_sightings(fort_id, team, last_modified) VALUES (" + str(gym_id) + ", 0, " + str(calendar.timegm(current_time.timetuple())) + ");")
 
             database.commit()
             
