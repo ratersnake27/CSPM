@@ -50,9 +50,9 @@ async def raid(ctx, arg, arg2, arg3, arg4): #arg = gym name, arg2 = pokemon name
         
         try:
             if arg.isnumeric():
-                cursor.execute("SELECT id, name FROM forts WHERE id LIKE '%" + str(arg) + "%';")
+                cursor.execute("SELECT id, name, lat, lon FROM forts WHERE id LIKE '%" + str(arg) + "%';")
             else:
-                cursor.execute("SELECT id, name FROM forts WHERE name LIKE '%" + str(arg) + "%';")
+                cursor.execute("SELECT id, name, lat, lon FROM forts WHERE name LIKE '%" + str(arg) + "%';")
             gym_data = cursor.fetchall()
             count = cursor.rowcount
 
@@ -71,7 +71,7 @@ async def raid(ctx, arg, arg2, arg3, arg4): #arg = gym name, arg2 = pokemon name
                 gym_names = ''
                 raid_count = 0
                 for gym in gym_data:
-                    gym_names += str(gym[0]) + ': ' + gym[1] +'\n'
+                    gym_names += str(gym[0]) + ': ' + gym[1] + ' (' + str(gym[2]) + ', ' + str(gym[3]) + ')\n'
 
 
 
