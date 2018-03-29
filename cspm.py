@@ -133,34 +133,34 @@ async def list(ctx, arg): #arg = string to search
     if ctx and ctx.message.channel.id == str(bot_channel):
         try:
             if arg.isnumeric():
-                cursor.execute("SELECT id, name FROM forts WHERE id LIKE '%" + str(arg) + "%';")
+                cursor.execute("SELECT id, name, lat, lon FROM forts WHERE id LIKE '%" + str(arg) + "%';")
             else:
-                cursor.execute("SELECT id, name FROM forts WHERE name LIKE '%" + str(arg) + "%';")
+                cursor.execute("SELECT id, name, lat, lon FROM forts WHERE name LIKE '%" + str(arg) + "%';")
             data = cursor.fetchall()
             count = cursor.rowcount
             gym_names = ''
             for gym in data:
-                gym_names += str(gym[0]) + ': ' + gym[1] + '\n'
+                gym_names += str(gym[0]) + ': ' + gym[1] + ' (' + str(gym[2]) + ', ' + str(gym[3]) + ')\n'
             database.commit()
             await bot.say('There are ' + str(count) + ' gyms with the word(s) "' + str(arg) + '" in it:\n' + str(gym_names))
         except:
             database.rollback()
-            await bot.say('No gym with the word "' + str(arg) + '" in it.')
+            await bot.say('No gym with the word "' + str(arg) + '" in it OR too many to list. Try narrowing down your search.')
 
 @list.error
 async def handle_missing_arg(ctx, error):
     try:
-        cursor.execute("SELECT id, name FROM forts;")
+        cursor.execute("SELECT id, name, lat, lon FROM forts;")
         data = cursor.fetchall()
         count = cursor.rowcount
         gym_names = ''
         for gym in data:
-            gym_names += str(gym[0]) + ': ' + gym[1] + '\n'
+            gym_names += str(gym[0]) + ': ' + gym[1] + ' (' + str(gym[2]) + ', ' + str(gym[3]) + ')\n'
         database.commit()
         await bot.say('There are ' + str(count) + ' gyms in the region:\n' + str(gym_names))
     except:
         database.rollback()
-        await bot.say('No gyms found.')
+        await bot.say('No gyms found OR too many to list.  Try narrowing down your search.')
   
 @bot.command(pass_context=True)
 async def spawn(ctx, arg, arg2, arg3):
