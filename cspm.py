@@ -37,6 +37,8 @@ def get_time(minute):
     future = datetime.datetime.utcnow() + datetime.timedelta(minutes=minute)
     return calendar.timegm(future.timetuple())
 
+print('CSPM Started.')
+
 #raid function
 @bot.command(pass_context=True)
 async def raid(ctx, arg, arg2, arg3, arg4): #arg = gym name, arg2 = pokemon name, arg3 = level, arg4 = time remaining
@@ -47,40 +49,71 @@ async def raid(ctx, arg, arg2, arg3, arg4): #arg = gym name, arg2 = pokemon name
         current_time = datetime.datetime.utcnow()
         
         try:
-            cursor.execute("SELECT id, name FROM forts WHERE NAME LIKE '%" + str(arg) + "%';")
-            data = cursor.fetchall()
+            if arg.isnumeric():
+                cursor.execute("SELECT id, name FROM forts WHERE id LIKE '%" + str(arg) + "%';")
+            else:
+                cursor.execute("SELECT id, name FROM forts WHERE name LIKE '%" + str(arg) + "%';")
+            gym_data = cursor.fetchall()
             count = cursor.rowcount
 
             if ( count == 1 ):
-                gym_id = data[0][0]
-                gym_name = data[0][1]
+                gym_id = gym_data[0][0]
+                gym_name = gym_data[0][1]
+                cursor.execute("SELECT id, fort_id, time_end FROM raids WHERE fort_id='" + str(gym_id) + "' AND time_end>'" + str(calendar.timegm(current_time.timetuple())) + "';")
+                raid_data = cursor.fetchall()
+                raid_count = cursor.rowcount
+ 
+                if (raid_count):
+                    raid_id = raid_data[0][0]
+                    raid_fort_id = raid_data[0][1]
+                    raid_time_end = raid_data[0][2]
             else:
                 gym_names = ''
-                for gym in data:
-                    gym_names += gym[1] +'\n'
+                raid_count = 0
+                for gym in gym_data:
+                    gym_names += str(gym[0]) + ': ' + gym[1] +'\n'
+
+
 
             if ( pokemon_name == "Egg" ):
                 est_end_time = remaining_time + 2700
-                cursor.execute("INSERT INTO raids("
-                               "id, external_id, fort_id , level, "
-                               "pokemon_id, move_1, move_2, time_spawn, "
-                               "time_battle, time_end, cp)"
-                               "VALUES "
-                               "(null, null, " + str(gym_id) + ", "
-                               + str(arg3) + ", " + str(pokemon_id) + ", null, null, "
-                               "null, " + str(remaining_time) + ", " + str(est_end_time) + ", null);")
+                
+                if (raid_count):
+                    cursor.execute("UPDATE raids SET level='" + str(arg3) + "', time_battle='" + str(remaining_time) + "', time_end='" + str(est_end_time) + "' WHERE id='" + str(raid_id)+ "';")
+                    await bot.say('Updated **Level ' + str(arg3) + ' ' + str(pokemon_name) + '**\nGym: **' + str(gym_id) + ': ' + str(gym_name) + ' Gym**\n' +
+                                  'Hatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**')
+                else:
+                    cursor.execute("INSERT INTO raids("
+                                   "id, external_id, fort_id , level, "
+                                   "pokemon_id, move_1, move_2, time_spawn, "
+                                   "time_battle, time_end, cp)"
+                                   "VALUES "
+                                   "(null, null, " + str(gym_id) + ", "
+                                   + str(arg3) + ", " + str(pokemon_id) + ", null, null, "
+                                   "null, " + str(remaining_time) + ", " + str(est_end_time) + ", null);")
+                    await bot.say('Added **Level ' + str(arg3) + ' ' + str(pokemon_name) + '** raid at the **' + str(gym_name) + '** gym with **' + str(arg4) + '** minutes left.')
             else:
-                cursor.execute("INSERT INTO raids("
-                               "id, external_id, fort_id , level, "
-                               "pokemon_id, move_1, move_2, time_spawn, "
-                               "time_battle, time_end, cp)"
-                               "VALUES "
-                               "(null, null, " + str(gym_id) + ", "
-                               + str(arg3) + ", " + str(pokemon_id) + ", null, null, "
-                               "null, " + str(calendar.timegm(current_time.timetuple())) + ", " + str(remaining_time) + ", null);")
+                # Update Egg to a hatched Raid Boss
+                if (raid_count):
+                    cursor.execute("UPDATE raids SET pokemon_id='" + str(pokemon_id) + "', level='" + str(arg3) + "', time_battle='" + str(calendar.timegm(current_time.timetuple())) + "', time_end='" + str(remaining_time) + "' WHERE id='" + str(raid_id)+ "';")
+                    await bot.say('Updated **Level ' + str(arg3) + ' ' + str(pokemon_name) + '** raid.\nGym: **' + str(gym_id) + ': ' + str(gym_name) + ' Gym**\n' +
+                                  'Raid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**')
+                else:
+                    cursor.execute("INSERT INTO raids("
+                                   "id, external_id, fort_id , level, "
+                                   "pokemon_id, move_1, move_2, time_spawn, "
+                                   "time_battle, time_end, cp)"
+                                   "VALUES "
+                                   "(null, null, " + str(gym_id) + ", "
+                                   + str(arg3) + ", " + str(pokemon_id) + ", null, null, "
+                                   "null, " + str(calendar.timegm(current_time.timetuple())) + ", " + str(remaining_time) + ", null);")
+                    await bot.say('Added **Level ' + str(arg3) + ' ' + str(pokemon_name) + '** raid at the **' + str(gym_name) + '** gym with **' + str(arg4) + '** minutes left.')
+
+            # Execute insert into fort_sightings to supress a map error
             cursor.execute("INSERT INTO fort_sightings(fort_id, team) VALUES (" + str(gym_id) + ", null);")
+
             database.commit()
-            await bot.say('Added **' + str(pokemon_name) + '** raid at the **' + str(gym_name) + '** gym with **' + str(arg4) + '** minutes left.')
+            
             
             if ( pokemon_name == "Egg" ):
                 await bot.send_message(discord.Object(id=log_channel), str(ctx.message.author.name) + ' reported a **Level ' + str(arg3) + ' ' + str(pokemon_name) + '** with about ' + str(arg4) + ' minutes left.\nGym: **' + str(gym_name) + ' Gym**\nHatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**') and print(str(ctx.message.author.name) + ' reported a ' + str(pokemon_name) + ' raid at ' + str(gym_name) + ' gym with ' + str(arg4) + ' minutes left.')
@@ -99,12 +132,15 @@ async def raid(ctx, arg, arg2, arg3, arg4): #arg = gym name, arg2 = pokemon name
 async def list(ctx, arg): #arg = string to search
     if ctx and ctx.message.channel.id == str(bot_channel):
         try:
-            cursor.execute("SELECT id, name FROM forts WHERE NAME LIKE '%" + str(arg) + "%';")
+            if arg.isnumeric():
+                cursor.execute("SELECT id, name FROM forts WHERE id LIKE '%" + str(arg) + "%';")
+            else:
+                cursor.execute("SELECT id, name FROM forts WHERE name LIKE '%" + str(arg) + "%';")
             data = cursor.fetchall()
             count = cursor.rowcount
             gym_names = ''
             for gym in data:
-                gym_names += gym[1] +'\n'
+                gym_names += str(gym[0]) + ': ' + gym[1] + '\n'
             database.commit()
             await bot.say('There are ' + str(count) + ' gyms with the word(s) "' + str(arg) + '" in it:\n' + str(gym_names))
         except:
@@ -119,7 +155,7 @@ async def handle_missing_arg(ctx, error):
         count = cursor.rowcount
         gym_names = ''
         for gym in data:
-            gym_names += gym[1] +'\n'
+            gym_names += str(gym[0]) + ': ' + gym[1] + '\n'
         database.commit()
         await bot.say('There are ' + str(count) + ' gyms in the region:\n' + str(gym_names))
     except:
