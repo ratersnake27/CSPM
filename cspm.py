@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 import asyncio
 from pokemonlist import pokemon, pokejson
-from config import bot_channel, token, host, user, password, database, website, log_channel
+from config import bot_channel, token, host, user, password, database, website, log_channel, instance_id
 import datetime
 import calendar
 import time
@@ -13,6 +13,8 @@ bot = commands.Bot(command_prefix = '!')#set prefix to !
 database = MySQLdb.connect(host,user,password,database)
 
 cursor = database.cursor()
+
+print('CSPM Started for ' + str(instance_id))
 
 def find_pokemon_id(name):
     if name == 'Nidoran-F':
@@ -55,7 +57,6 @@ def get_team_id(raw_team):
     return gym_team_id
 
 def get_team_name(team_id):
-    print('Team id is: ' + str(team_id))
     if ( team_id == 1 ):
         team_name = 'Mystic'
     elif ( team_id == 2 ):
@@ -64,10 +65,7 @@ def get_team_name(team_id):
         team_name = 'Instinct'
     else:
         team_name = 'Unknown'
-    print('team_name is: ' + str(team_name))
     return team_name
-
-print('CSPM Started.')
 
 #raid function
 @bot.command(pass_context=True)
@@ -81,12 +79,13 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
         
         try:
             if raw_gym_name.isnumeric():
-                cursor.execute("SELECT id, name, lat, lon FROM forts WHERE id LIKE '%" + str(raw_gym_name) + "%';")
+                cursor.execute("SELECT id, name, lat, lon FROM forts WHERE id LIKE '" + str(raw_gym_name) + "';")
             else:
                 cursor.execute("SELECT id, name, lat, lon FROM forts WHERE name LIKE '%" + str(raw_gym_name) + "%';")
             gym_data = cursor.fetchall()
             count = cursor.rowcount
 
+            # Single gym_id is returned so check if a raid exists for it
             if ( count == 1 ):
                 gym_id = gym_data[0][0]
                 gym_name = gym_data[0][1]
@@ -111,8 +110,11 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                 
                 if (raid_count):
                     cursor.execute("UPDATE raids SET level='" + str(raw_raid_level) + "', time_battle='" + str(remaining_time) + "', time_end='" + str(est_end_time) + "' WHERE id='" + str(raid_id)+ "';")
-                    await bot.say('Updated **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '**\nGym: **' + str(gym_id) + ': ' + str(gym_name) + ' Gym**\n' +
-                                  'Hatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
+                    await bot.say('Updated **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '**' +
+                                  '\nGym: **' + str(gym_id) + ': ' + str(gym_name) + ' Gym' + '**' +
+                                  '\nHatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                                  '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**' +
+                                  '\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
                 else:
                     cursor.execute("INSERT INTO raids("
                                    "id, external_id, fort_id , level, "
@@ -122,13 +124,38 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                                    "(null, null, " + str(gym_id) + ", "
                                    + str(raw_raid_level) + ", " + str(pokemon_id) + ", null, null, "
                                    "null, " + str(remaining_time) + ", " + str(est_end_time) + ", null);")
-                    await bot.say('Added **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '** raid at the **' + str(gym_name) + '** gym with **' + str(raw_time_remaining) + '** minutes left.')
+                    await bot.say('Added new **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '**' +
+                                  '\nGym: **' + str(gym_name) + ' Gym' + '**' +
+                                  '\nHatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                                  '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**' +
+                                  '\nTime Left: **' + str(raw_time_remaining) + '** minutes.' +
+                                  '\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
+                    await bot.send_message(discord.Object(id=log_channel),
+                        '----------------------------------------------------' +
+                        '\nReport: **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '**' +
+                        '\nGym: **' + str(gym_name) + ' Gym' + '**' +
+                        '\nHatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                        '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**' +
+                        '\nTeam: **' + str(get_team_name(gym_team_id)) + '**' +
+                        '\nReported by: __' + str(ctx.message.author.name) + '__' +
+                        '\n\nhttps://www.google.com/maps?q=loc:' + str(gym_data[0][2]) + ',' + str(gym_data[0][3]) )
+                    print(str(ctx.message.author.name) + ' reported a ' + str(pokemon_name) + ' raid at ' + str(gym_name) + ' gym with ' + str(raw_time_remaining) + ' minutes left.')
             else:
                 # Update Egg to a hatched Raid Boss
                 if (raid_count):
                     cursor.execute("UPDATE raids SET pokemon_id='" + str(pokemon_id) + "', level='" + str(raw_raid_level) + "', time_battle='" + str(calendar.timegm(current_time.timetuple())) + "', time_end='" + str(remaining_time) + "' WHERE id='" + str(raid_id)+ "';")
-                    await bot.say('Updated **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '** raid.\nGym: **' + str(gym_id) + ': ' + str(gym_name) + ' Gym**\n' +
-                                  'Raid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
+                    await bot.say('Updated **Level ' + str(raw_raid_level) + ' Egg to ' + str(pokemon_name) + ' Raid' + '**' +
+                                  '\nGym: **' + str(gym_id) + ': ' + str(gym_name) + ' Gym' + '**' +
+                                  '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                                  '\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
+                    await bot.send_message(discord.Object(id=log_channel),
+                        '----------------------------------------------------' +
+                        '\nReport: **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + ' Raid' + '**' +
+                        '\nGym: **' + str(gym_name) + ' Gym**' +
+                        '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                        '\nTeam: **' + str(get_team_name(gym_team_id))+ '**' +
+                        '\nReported by: __' + str(ctx.message.author.name) + '__' +
+                        '\n\nhttps://www.google.com/maps?q=loc:' + str(gym_data[0][2]) + ',' + str(gym_data[0][3]) )
                 else:
                     cursor.execute("INSERT INTO raids("
                                    "id, external_id, fort_id , level, "
@@ -138,18 +165,30 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                                    "(null, null, " + str(gym_id) + ", "
                                    + str(raw_raid_level) + ", " + str(pokemon_id) + ", null, null, "
                                    "null, " + str(calendar.timegm(current_time.timetuple())) + ", " + str(remaining_time) + ", null);")
-                    await bot.say('Added **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '** raid at the **' + str(gym_name) + ' (' + str(get_team_name(gym_team_id)) + ')** gym with **' + str(raw_time_remaining) + '** minutes left.')
-
-            # Execute insert into fort_sightings to track gym team defaults to 0
-            cursor.execute("INSERT INTO fort_sightings(fort_id, team, last_modified) VALUES (" + str(gym_id) + ", " + str(gym_team_id) + ", " + str(calendar.timegm(current_time.timetuple())) + ");")
+                    await bot.say('Added new **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + ' Raid' + '**' +
+                                  '\nGym: **' + str(gym_name) + ' Gym**' +
+                                  '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                                  '\nTime Left: **' + str(raw_time_remaining) + '** minutes.' +
+                                  '\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
+                    await bot.send_message(discord.Object(id=log_channel),
+                        '----------------------------------------------------' +
+                        '\nReport: **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + ' Raid' + '**' +
+                        '\nGym: **' + str(gym_name) + ' Gym**' +
+                        '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                        '\nTeam: **' + str(get_team_name(gym_team_id))+ '**' +
+                        '\nReported by: __' + str(ctx.message.author.name) + '__' +
+                        '\n\nhttps://www.google.com/maps?q=loc:' + str(gym_data[0][2]) + ',' + str(gym_data[0][3]) )
+                    print(str(ctx.message.author.name) + ' reported a ' + str(pokemon_name) + ' raid at ' + str(gym_name) + ' gym (' + str(get_team_name(gym_team_id)) + ') with ' + str(raw_time_remaining) + ' minutes left.')
+            # Check if fort_id exists in fort_sightings.  If so update the entry, otherwise enter as a new entry.
+            cursor.execute("SELECT id, fort_id, team FROM fort_sightings WHERE fort_id='" + str(gym_id) + "';")
+            fs_count = cursor.rowcount
+            if (fs_count):
+                cursor.execute("UPDATE fort_sightings SET team='" + str(gym_team_id) + "' WHERE fort_id='" + str(gym_id) + "';")
+            else:
+                cursor.execute("INSERT INTO fort_sightings(fort_id, team, last_modified) VALUES (" + str(gym_id) + ", " + str(gym_team_id) + ", " + str(calendar.timegm(current_time.timetuple())) + ");")
 
             database.commit()
             
-            
-            if ( pokemon_name == "Egg" ):
-                await bot.send_message(discord.Object(id=log_channel), str(ctx.message.author.name) + ' reported a **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '** with about ' + str(raw_time_remaining) + ' minutes left.\nGym: **' + str(gym_name) + ' Gym**\nHatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**\nTeam: **' + str(get_team_name(gym_team_id))+ '**') and print(str(ctx.message.author.name) + ' reported a ' + str(pokemon_name) + ' raid at ' + str(gym_name) + ' gym with ' + str(raw_time_remaining) + ' minutes left.')
-            else:
-                await bot.send_message(discord.Object(id=log_channel), str(ctx.message.author.name) + ' reported a **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + ' Raid** with about ' + str(raw_time_remaining) + ' minutes left.\nGym: **' + str(gym_name) + ' Gym**\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**\nTeam: **' + str(get_team_name(gym_team_id))+ '**') and print(str(ctx.message.author.name) + ' reported a ' + str(pokemon_name) + ' raid at ' + str(gym_name) + ' gym (' + str(get_team_name(gym_team_id)) + ') with ' + str(raw_time_remaining) + ' minutes left.')
         except:
             database.rollback()
             if ( count > 1 ):
@@ -197,30 +236,32 @@ async def handle_missing_arg(ctx, error):
         database.rollback()
         await bot.say('No gyms found OR too many to list.  Try narrowing down your search.')
   
-@bot.command(pass_context=True)
-async def spawn(ctx, arg, arg2, arg3):
-    if ctx and ctx.message.channel.id == str(bot_channel) and arg in pokemon:
-        pokemon_id = find_pokemon_id(str(arg).capitalize())
-        time = get_time(15)
-        try:
-            cursor.execute("INSERT INTO sightings("
-                           "id, pokemon_id, spawn_id, expire_timestamp, encounter_id, lat, lon, "
-                           "atk_iv, def_iv, sta_iv, move_1, move_2, gender, "
-                           "form, cp, level, updated, weather_boosted_condition, weather_cell_id, weight) "
-                           "VALUES (null, " + str(pokemon_id) +", null," + str(time) + ", null," + str(arg2) + ", " + str(arg3) +
-                           ", null, null, null, null, null, null,"
-                           " null, null, null, null, null, null, null);")
-            database.commit()
-            await bot.say('Successfully added your spawn to the live map.\n'
-                          '*Pokemon timers are automatically given 15 minutes since the timer is unknown.*')
-            await bot.send_message(discord.Object(id=log_channel), str(ctx.message.author.name) + ' said there was a wild ' + str(arg) +
-                                   ' at these coordinates: ' + str(arg2) + ', ' + str(arg3))  and print(str(ctx.message.author.name) + ' said there was a wild ' + str(arg) +
-                                   ' at these coordinates: ' + str(arg2) + ', ' + str(arg3))
-        except:
-            await bot.say('Unsuccessful in database query, your reported spawn was not added to the live map.')
+
 @bot.command(pass_context=True)
 async def map(ctx):
     if ctx:
-        await bot.say('Hey! Visit' + str(website) + ' to see our crowd-sourced spawns!')
+        await bot.say('Visit' + str(website) + ' to see our crowd-sourced Raids!')
+
+
+@bot.command(pass_context=True)
+async def helpme(ctx):
+    if ctx:
+        help_embed=discord.Embed(
+            title='PoGoSD CSPM Help',
+            description='**Mapping Raids:**\n'
+                        'To add a raid to the live map, use the following command:\n'
+                        '`!raid <gym_name or gym_id> <pokemon_name> <raid_level> <minutes remaining> <gym team>`\n'
+                        'Example: `!raid "Fave Bird Mural" Lugia 5 45 Instinct`\n\n'
+                        'Example: `!raid mural lugia 5 45 inst`\n\n'
+                        'Example: `!raid 55 lugia 5 45 yel`\n\n'
+                        '*To see raids that are crowdsourced, please make sure you tick the raids option in layers (top right)*\n\n'
+                        '**List Gyms:**\n'
+                        'This will help you search for gym names and ids:\n'
+                        '`!list <search_string or number>`\n'
+                        'Example: `!list 55`\n'
+                        'Result: `55: Name of a Gym`',
+            color=3447003
+        )
+        await bot.say(embed=help_embed)
 
 bot.run(token)
