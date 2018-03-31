@@ -301,6 +301,6 @@ async def helpme(ctx):
                         'Result: `55: Name of a Gym`',
             color=3447003
         )
-        await bot.send_message(discord.Object(id=bot_channel),embed=help_embed)
+        await bot.say(embed=help_embed)
 
 bot.run(token)
