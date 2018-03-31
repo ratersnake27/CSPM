@@ -155,7 +155,7 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                         title='**Level ' + str(raw_raid_level) + ' Egg**',
                         description='Gym: **' + str(gym_name) + ' Gym**' +
                                     '\nHatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
-                                    '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                                    '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**' +
                                     '\nTeam: **' + str(get_team_name(gym_team_id))+ '**' +
                                     '\nReported by: __' + str(ctx.message.author.name) + '__' +
                                     '\n\nhttps://www.google.com/maps?q=loc:' + str(gym_data[0][2]) + ',' + str(gym_data[0][3]),
