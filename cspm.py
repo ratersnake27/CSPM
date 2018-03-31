@@ -239,7 +239,8 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
 
 @raid.error
 async def handle_missing_raid_arg(ctx, error):
-    await bot.say('Unsuccesful add to the map. Missing arguments. !raid  "*gym_name*"  *pokemon_name*  *raid_level*  *minutes_left*  *gym_team*\n')
+    if ctx and ctx.message.channel.id == str(bot_channel):
+        await bot.say('Unsuccesful add to the map. Missing arguments. !raid  "*gym_name*"  *pokemon_name*  *raid_level*  *minutes_left*  *gym_team*\n')
 
 @bot.command(pass_context=True)
 async def list(ctx, raw_gym_name):
@@ -262,23 +263,24 @@ async def list(ctx, raw_gym_name):
 
 @list.error
 async def handle_missing_arg(ctx, error):
-    try:
-        cursor.execute("SELECT id, name, lat, lon FROM forts;")
-        data = cursor.fetchall()
-        count = cursor.rowcount
-        gym_names = ''
-        for gym in data:
-            gym_names += str(gym[0]) + ': ' + gym[1] + ' (' + str(gym[2]) + ', ' + str(gym[3]) + ')\n'
-        database.commit()
-        await bot.say('There are ' + str(count) + ' gyms in the region:\n' + str(gym_names))
-    except:
-        database.rollback()
-        await bot.say('No gyms found OR too many to list.  Try narrowing down your search.')
+    if ctx and ctx.message.channel.id == str(bot_channel):
+        try:
+            cursor.execute("SELECT id, name, lat, lon FROM forts;")
+            data = cursor.fetchall()
+            count = cursor.rowcount
+            gym_names = ''
+            for gym in data:
+                gym_names += str(gym[0]) + ': ' + gym[1] + ' (' + str(gym[2]) + ', ' + str(gym[3]) + ')\n'
+            database.commit()
+            await bot.say('There are ' + str(count) + ' gyms in the region:\n' + str(gym_names))
+        except:
+            database.rollback()
+            await bot.say('No gyms found OR too many to list.  Try narrowing down your search.')
   
 
 @bot.command(pass_context=True)
 async def map(ctx):
-    if ctx:
+    if ctx and ctx.message.channel.id == str(bot_channel):
         await bot.say('Visit ' + str(website) + ' to see our crowd-sourced Raids!')
 
 
