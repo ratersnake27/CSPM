@@ -67,6 +67,27 @@ def get_team_name(team_id):
         team_name = 'Unknown'
     return team_name
 
+def team_color(team_id):
+    if ( team_id == 1 ):
+        color = 0x005ef7
+    elif ( team_id == 2 ):
+        color = 0xdb0000
+    elif ( team_id == 3 ):
+        color = 0xfcd00a
+    else:
+        color = 0xbcbcbc
+    return color
+
+def get_egg_url(egg_level):
+    if ( egg_level >= '1' ) and ( egg_level <= '2' ):
+        egg_url = 'https://raw.githubusercontent.com/ZeChrales/PogoAssets/master/static_assets/png/ic_raid_egg_normal.png'
+    elif ( egg_level >= '3' ) and ( egg_level <= '4' ):
+        egg_url = 'https://raw.githubusercontent.com/ZeChrales/PogoAssets/master/static_assets/png/ic_raid_egg_rare.png'
+    else:
+        egg_url = 'https://raw.githubusercontent.com/ZeChrales/PogoAssets/master/static_assets/png/ic_raid_egg_legendary.png'
+
+    return egg_url
+
 #raid function
 @bot.command(pass_context=True)
 async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_remaining, raw_team):
@@ -128,18 +149,23 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                                   '\nGym: **' + str(gym_name) + ' Gym' + '**' +
                                   '\nHatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
                                   '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**' +
-                                  '\nTime Left: **' + str(raw_time_remaining) + '** minutes.' +
+                                  '\nTime Left: **' + str(raw_time_remaining) + ' minutes**' +
                                   '\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
-                    await bot.send_message(discord.Object(id=log_channel),
-                        '----------------------------------------------------' +
-                        '\nReport: **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '**' +
-                        '\nGym: **' + str(gym_name) + ' Gym' + '**' +
-                        '\nHatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
-                        '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**' +
-                        '\nTeam: **' + str(get_team_name(gym_team_id)) + '**' +
-                        '\nReported by: __' + str(ctx.message.author.name) + '__' +
-                        '\n\nhttps://www.google.com/maps?q=loc:' + str(gym_data[0][2]) + ',' + str(gym_data[0][3]) )
-                    print(str(ctx.message.author.name) + ' reported a ' + str(pokemon_name) + ' raid at ' + str(gym_name) + ' gym with ' + str(raw_time_remaining) + ' minutes left.')
+                    raid_embed=discord.Embed(
+                        title='**Level ' + str(raw_raid_level) + ' Egg**',
+                        description='Gym: **' + str(gym_name) + ' Gym**' +
+                                    '\nHatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                                    '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                                    '\nTeam: **' + str(get_team_name(gym_team_id))+ '**' +
+                                    '\nReported by: __' + str(ctx.message.author.name) + '__' +
+                                    '\n\nhttps://www.google.com/maps?q=loc:' + str(gym_data[0][2]) + ',' + str(gym_data[0][3]),
+                        color=team_color(gym_team_id)
+                    )
+                    thumbnail_image_url = get_egg_url(raw_raid_level)
+                    raid_embed.set_thumbnail(url=thumbnail_image_url)
+                    await bot.send_message(discord.Object(id=log_channel), embed=raid_embed)
+                    
+                    print(str(ctx.message.author.name) + ' reported a ' + str(pokemon_name) + ' at ' + str(gym_name) + ' gym with ' + str(raw_time_remaining) + ' minutes left.')
             else:
                 # Update Egg to a hatched Raid Boss
                 if (raid_count):
@@ -148,14 +174,22 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                                   '\nGym: **' + str(gym_id) + ': ' + str(gym_name) + ' Gym' + '**' +
                                   '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
                                   '\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
-                    await bot.send_message(discord.Object(id=log_channel),
-                        '----------------------------------------------------' +
-                        '\nReport: **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + ' Raid' + '**' +
-                        '\nGym: **' + str(gym_name) + ' Gym**' +
-                        '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
-                        '\nTeam: **' + str(get_team_name(gym_team_id))+ '**' +
-                        '\nReported by: __' + str(ctx.message.author.name) + '__' +
-                        '\n\nhttps://www.google.com/maps?q=loc:' + str(gym_data[0][2]) + ',' + str(gym_data[0][3]) )
+
+                    raid_embed=discord.Embed(
+                        title='**Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + ' Raid**',
+                        description='Gym: **' + str(gym_name) + ' Gym**' +
+                                    '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                                    '\nTeam: **' + str(get_team_name(gym_team_id))+ '**' +
+                                    '\nReported by: __' + str(ctx.message.author.name) + '__' +
+                                    '\n\nhttps://www.google.com/maps?q=loc:' + str(gym_data[0][2]) + ',' + str(gym_data[0][3]),
+                        color=team_color(gym_team_id)
+                    )
+                    thumbnail_image_url = 'https://bitbucket.org/anzmap/sprites/raw/HEAD/' + str(pokemon_id) + '.png'
+                    raid_embed.set_thumbnail(url=thumbnail_image_url)
+                    await bot.send_message(discord.Object(id=log_channel), embed=raid_embed)
+
+                    print(str(ctx.message.author.name) + ' updated the ' + str(raw_raid_level) + ' Egg to ' + str(pokemon_name) + ' Raid at ' + str(gym_name) + ' gym (' + str(get_team_name(gym_team_id)) + ') with ' + str(raw_time_remaining) + ' minutes left.')
+
                 else:
                     cursor.execute("INSERT INTO raids("
                                    "id, external_id, fort_id , level, "
@@ -168,16 +202,21 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                     await bot.say('Added new **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + ' Raid' + '**' +
                                   '\nGym: **' + str(gym_name) + ' Gym**' +
                                   '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
-                                  '\nTime Left: **' + str(raw_time_remaining) + '** minutes.' +
+                                  '\nTime Left: **' + str(raw_time_remaining) + ' minutes**' +
                                   '\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
-                    await bot.send_message(discord.Object(id=log_channel),
-                        '----------------------------------------------------' +
-                        '\nReport: **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + ' Raid' + '**' +
-                        '\nGym: **' + str(gym_name) + ' Gym**' +
-                        '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
-                        '\nTeam: **' + str(get_team_name(gym_team_id))+ '**' +
-                        '\nReported by: __' + str(ctx.message.author.name) + '__' +
-                        '\n\nhttps://www.google.com/maps?q=loc:' + str(gym_data[0][2]) + ',' + str(gym_data[0][3]) )
+                    
+                    raid_embed=discord.Embed(
+                        title='**Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + ' Raid**',
+                        description='Gym: **' + str(gym_name) + ' Gym**' +
+                                    '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                                    '\nTeam: **' + str(get_team_name(gym_team_id))+ '**' +
+                                    '\nReported by: __' + str(ctx.message.author.name) + '__' +
+                                    '\n\nhttps://www.google.com/maps?q=loc:' + str(gym_data[0][2]) + ',' + str(gym_data[0][3]),
+                        color=team_color(gym_team_id)
+                    )
+                    thumbnail_image_url = 'https://bitbucket.org/anzmap/sprites/raw/HEAD/' + str(pokemon_id) + '.png'
+                    raid_embed.set_thumbnail(url=thumbnail_image_url)
+                    await bot.send_message(discord.Object(id=log_channel), embed=raid_embed)
                     print(str(ctx.message.author.name) + ' reported a ' + str(pokemon_name) + ' raid at ' + str(gym_name) + ' gym (' + str(get_team_name(gym_team_id)) + ') with ' + str(raw_time_remaining) + ' minutes left.')
             # Check if fort_id exists in fort_sightings.  If so update the entry, otherwise enter as a new entry.
             cursor.execute("SELECT id, fort_id, team FROM fort_sightings WHERE fort_id='" + str(gym_id) + "';")
@@ -240,7 +279,7 @@ async def handle_missing_arg(ctx, error):
 @bot.command(pass_context=True)
 async def map(ctx):
     if ctx:
-        await bot.say('Visit' + str(website) + ' to see our crowd-sourced Raids!')
+        await bot.say('Visit ' + str(website) + ' to see our crowd-sourced Raids!')
 
 
 @bot.command(pass_context=True)
@@ -262,6 +301,6 @@ async def helpme(ctx):
                         'Result: `55: Name of a Gym`',
             color=3447003
         )
-        await bot.say(embed=help_embed)
+        await bot.send_message(discord.Object(id=bot_channel),embed=help_embed)
 
 bot.run(token)
