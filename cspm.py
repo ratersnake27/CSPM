@@ -284,7 +284,7 @@ async def map(ctx):
 
 @bot.command(pass_context=True)
 async def helpme(ctx):
-    if ctx:
+    if ctx and ctx.message.channel.id == str(bot_channel):
         help_embed=discord.Embed(
             title='PoGoSD CSPM Help',
             description='**Mapping Raids:**\n'
