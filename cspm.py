@@ -97,6 +97,7 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
         remaining_time = get_time(int(raw_time_remaining))
         current_time = datetime.datetime.utcnow()
         gym_team_id = get_team_id(raw_team)
+        database.ping(True)
         
         try:
             if raw_gym_name.isnumeric():
@@ -200,7 +201,7 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                                    + str(raw_raid_level) + ", " + str(pokemon_id) + ", null, null, "
                                    "null, " + str(calendar.timegm(current_time.timetuple())) + ", " + str(remaining_time) + ", null);")
                     await bot.say('Added new **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + ' Raid' + '**' +
-                                  '\nGym: **' + str(gym_name) + ' Gym**' +
+                                  '\nGym: **' + str(gym_id) + ': ' + str(gym_name) + ' Gym**' +
                                   '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
                                   '\nTime Left: **' + str(raw_time_remaining) + ' minutes**' +
                                   '\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
@@ -254,8 +255,8 @@ async def list(ctx, raw_gym_name):
             gym_names = ''
             for gym in data:
                 gym_names += str(gym[0]) + ': ' + gym[1] + ' (' + str(gym[2]) + ', ' + str(gym[3]) + ')\n'
-            database.commit()
             await bot.say('There are ' + str(count) + ' gyms with the word(s) "' + str(raw_gym_name) + '" in it:\n' + str(gym_names))
+            database.commit()
         except:
             database.rollback()
             await bot.say('No gym with the word "' + str(raw_gym_name) + '" in it OR too many to list. Try narrowing down your search.')
@@ -281,6 +282,107 @@ async def map(ctx):
     if ctx:
         await bot.say('Visit ' + str(website) + ' to see our crowd-sourced Raids!')
 
+@bot.command(pass_context=True)
+async def deleteraid(ctx, fort_id):
+    if ctx and ctx.message.channel.id == str(bot_channel):
+        current_time = datetime.datetime.utcnow()
+        try:
+            if fort_id.isnumeric():
+                cursor.execute("SELECT id, name, lat, lon FROM forts WHERE id='" + str(fort_id) + "';")
+                gym_data = cursor.fetchall()
+                count = cursor.rowcount
+                fort_id = gym_data[0][0]
+                gym_name = gym_data[0][1]
+                gym_lat = gym_data[0][2]
+                gym_lon = gym_data[0][3]
+                
+                # Gym id is valid and returned 1 result
+                if ( count == 1 ):
+                    cursor.execute("SELECT fort_id, level, pokemon_id, time_battle, time_end FROM raids WHERE fort_id='" + str(fort_id) + "' AND time_end>'" + str(calendar.timegm(current_time.timetuple())) + "';")
+                    raid_data = cursor.fetchall()
+                    raid_count = cursor.rowcount
+                    
+                    raid_fort_id = raid_data[0][0]
+                    raid_level = raid_data[0][1]
+                    raid_pokemon_id = raid_data[0][2]
+                    raid_time_battle = raid_data[0][3]
+                    raid_time_end = raid_data[0][4]
+
+                    if ( raid_pokemon_id == 0 ):
+                        raid_pokemon_name = 'Unknown (Egg)'
+                    else:
+                        raid_pokemon_name = pokejson[str(raid_pokemon_id)]
+
+                    await bot.say('**Deleted the following raid**' +
+                                  '\nGym: **' + str(fort_id) + ': ' + str(gym_name) + ' Gym**' +
+                                  '\nLevel: **' + str(raid_level) + '**' +
+                                  '\nPokemon: ** ' + str(raid_pokemon_name).capitalize() + '**' +
+                                  '\nStart\Hatch Time: **' + str(time.strftime('%I:%M %p',  time.localtime(raid_time_battle))) + '**' +
+                                  '\nEnd Time: **' + str(time.strftime('%I:%M %p',  time.localtime(raid_time_end))) + '**')
+                    
+                    cursor.execute("DELETE FROM raids WHERE fort_id='" + str(fort_id) + "' AND time_end>'" + str(calendar.timegm(current_time.timetuple())) + "';")
+                    print(str(ctx.message.author.name) + ' deleted the Level ' + str(raid_level) + ' Raid at the ' + str(fort_id) + ': ' + str(gym_name) + ' Gym.')
+                else:
+                    await bot.say('Gym ID provided is not valid.')
+            else:
+                await bot.say('Enter the numeric ID of the gym where the raid is located.')
+            
+            database.commit()
+        except:
+            database.rollback()
+            await bot.say('Raid at the **' + str(fort_id) + ': ' + str(gym_name) +  ' Gym** does not exist.')
+
+@bot.command(pass_context=True)
+async def activeraids(ctx):
+    if ctx and ctx.message.channel.id == str(bot_channel):
+        current_time = datetime.datetime.utcnow()
+        try:
+            cursor.execute("SELECT f.id, f.name, r.level, r.pokemon_id, r.time_battle, r.time_end FROM forts f JOIN raids r ON f.id=r.fort_id WHERE r.time_end>'" + str(calendar.timegm(current_time.timetuple())) + "' ORDER BY r.level DESC, r.time_end;")
+            raid_data = cursor.fetchall()
+            raid_count = cursor.rowcount
+            
+            await bot.say('There are currently ' + str(raid_count) + ' active raids.')
+            active_raids_l5 = ''
+            active_raids_l4 = ''
+            active_raids_l3 = ''
+            active_raids_l2 = ''
+            active_raids_l1 = ''
+            for raid in raid_data:
+                fort_id, gym_name, raid_level, raid_pokemon_id, raid_time_battle, raid_time_end = raid
+                if ( raid_pokemon_id == 0 ):
+                    raid_pokemon_name = 'Unknown (Egg)'
+                else:
+                    raid_pokemon_name = pokejson[str(raid_pokemon_id)]
+        
+                if ( raid_level == 5 ):
+                    active_raids_l5 += str(time.strftime('%I:%M %p',  time.localtime(raid_time_end))) + ' : ' + str(raid_pokemon_name) + ' : ' + str(gym_name) + ' Gym (' +  str(fort_id) + ')\n'
+                elif ( raid_level == 4 ):
+                    active_raids_l4 += str(time.strftime('%I:%M %p',  time.localtime(raid_time_end))) + ' : ' + str(raid_pokemon_name) + ' : ' + str(gym_name) + ' Gym (' +  str(fort_id) + ')\n'
+                elif ( raid_level == 3 ):
+                    active_raids_l3 += str(time.strftime('%I:%M %p',  time.localtime(raid_time_end))) + ' : ' + str(raid_pokemon_name) + ' : ' + str(gym_name) + ' Gym (' +  str(fort_id) + ')\n'
+                elif ( raid_level == 2 ):
+                    active_raids_l2 += str(time.strftime('%I:%M %p',  time.localtime(raid_time_end))) + ' : ' + str(raid_pokemon_name) + ' : ' + str(gym_name) + ' Gym (' +  str(fort_id) + ')\n'
+                else:
+                    active_raids_l1 += str(time.strftime('%I:%M %p',  time.localtime(raid_time_end))) + ' : ' + str(raid_pokemon_name) + ' : ' + str(gym_name) + ' Gym (' +  str(fort_id) + ')\n'
+                    
+            raid_report = ''
+            if ( active_raids_l5 != '' ):
+                raid_report += '**LEVEL 5**\n' + active_raids_l5
+            if ( active_raids_l4 != '' ):
+                raid_report += '\n**LEVEL 4**\n' + active_raids_l4
+            if ( active_raids_l3 != '' ):
+                raid_report += '\n**LEVEL 3**\n' + active_raids_l3
+            if ( active_raids_l2 != '' ):
+                raid_report += '\n**LEVEL 2**\n' + active_raids_l2
+            if ( active_raids_l1 != '' ):
+                raid_report += '\n**LEVEL 1**\n' + active_raids_l1
+
+            await bot.say('**END TIME : POKEMON : GYM**\n' + str(raid_report))
+
+            database.commit()
+        except:
+            database.rollback()
+            await bot.say('There are no active raids.')
 
 @bot.command(pass_context=True)
 async def helpme(ctx):
@@ -298,7 +400,14 @@ async def helpme(ctx):
                         'This will help you search for gym names and ids:\n'
                         '`!list <search_string or number>`\n'
                         'Example: `!list 55`\n'
-                        'Result: `55: Name of a Gym`',
+                        'Result: `55: Name of a Gym`\n\n'
+                        '**Delete Raids**\n'
+                        'This will allow you to delete a raid by gym id\n'
+                        '`!deleteraid <gym_id>`\n'
+                        'Example: `!deleteraid 55`\n\n'
+                        '**Show Active Raids**\n'
+                        'This will allow you to list all active raids. Which is useful to identify a raid you may need to delete.\n'
+                        '`!activeraids`',
             color=3447003
         )
         await bot.say(embed=help_embed)
