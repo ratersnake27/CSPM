@@ -245,6 +245,7 @@ async def handle_missing_raid_arg(ctx, error):
 @bot.command(pass_context=True)
 async def list(ctx, raw_gym_name):
     if ctx and ctx.message.channel.id == str(bot_channel):
+        database.ping(True)
         try:
             if raw_gym_name.isnumeric():
                 cursor.execute("SELECT id, name, lat, lon FROM forts WHERE id LIKE '%" + str(raw_gym_name) + "%';")
@@ -285,6 +286,7 @@ async def map(ctx):
 @bot.command(pass_context=True)
 async def deleteraid(ctx, fort_id):
     if ctx and ctx.message.channel.id == str(bot_channel):
+        database.ping(True)
         current_time = datetime.datetime.utcnow()
         try:
             if fort_id.isnumeric():
@@ -335,6 +337,7 @@ async def deleteraid(ctx, fort_id):
 @bot.command(pass_context=True)
 async def activeraids(ctx):
     if ctx and ctx.message.channel.id == str(bot_channel):
+        database.ping(True)
         current_time = datetime.datetime.utcnow()
         try:
             cursor.execute("SELECT f.id, f.name, r.level, r.pokemon_id, r.time_battle, r.time_end FROM forts f JOIN raids r ON f.id=r.fort_id WHERE r.time_end>'" + str(calendar.timegm(current_time.timetuple())) + "' ORDER BY r.level DESC, r.time_end;")
@@ -386,6 +389,7 @@ async def activeraids(ctx):
 
 @bot.command(pass_context=True)
 async def updategymname(ctx, fort_id, new_gym_name):
+    database.ping(True)
     if ctx and ctx.message.channel.id == str(bot_channel):
         try:
             cursor.execute("SELECT id, name FROM forts WHERE id='" + str(fort_id) + "';")
