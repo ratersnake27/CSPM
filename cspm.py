@@ -385,6 +385,37 @@ async def activeraids(ctx):
             await bot.say('There are no active raids.')
 
 @bot.command(pass_context=True)
+async def updategymname(ctx, fort_id, new_gym_name):
+    if ctx and ctx.message.channel.id == str(bot_channel):
+        try:
+            cursor.execute("SELECT id, name FROM forts WHERE id='" + str(fort_id) + "';")
+            gym_data = cursor.fetchall()
+            gym_count = cursor.rowcount
+            
+            if ( gym_count == 1 ):
+                fort_id, gym_name = gym_data[0]
+        
+                cursor.execute("UPDATE forts SET name='" + str(new_gym_name) + "' WHERE id='" + str(fort_id) + "';")
+                cursor.execute("SELECT name FROM forts WHERE id='" + str(fort_id) + "';")
+                updated_gym_data = cursor.fetchall()
+                updated_gym_name = updated_gym_data[0][0]
+                await bot.say('Changed the name of:\n__' + str(fort_id) + ': ' + str(gym_name) + '__\nto:\n**' + str(fort_id) + ': ' + str(updated_gym_name) + '**')
+            else:
+                await bot.say('There are multiple gyms with gym_id: ' + str(fort_id) + '.  Delete all of the duplicate gym_ids before proceeding.')
+            database.commit()
+        except:
+            database.rollback()
+
+@updategymname.error
+async def handle_missing_fort_id(ctx, error):
+    if ctx:
+        try:
+            await bot.say('Missing arugment(s).\n`!updategymname <gym_id> <new_gym_name>`')
+        except:
+            await bot.say('Exception reached.')
+
+
+@bot.command(pass_context=True)
 async def helpme(ctx):
     if ctx and ctx.message.channel.id == str(bot_channel):
         help_embed=discord.Embed(
