@@ -424,7 +424,7 @@ async def helpme(ctx):
     if ctx and ctx.message.channel.id == str(bot_channel):
         help_embed=discord.Embed(
             title='PoGoSD CSPM Help',
-            description='**Mapping Raids:**\n'
+            content='**Mapping Raids:**\n'
                         'To add a raid to the live map, use the following command:\n'
                         '`!raid <gym_name or gym_id> <pokemon_name> <raid_level> <minutes remaining> <gym team>`\n'
                         'Example: `!raid "Fave Bird Mural" Lugia 5 45 Instinct`\n\n'
@@ -436,6 +436,11 @@ async def helpme(ctx):
                         '`!list <search_string or number>`\n'
                         'Example: `!list 55`\n'
                         'Result: `55: Name of a Gym`\n\n'
+                        '**Modify Gym Name**\n'
+                        'Use this command to modify a gym name to help with identifying gyms with the same name, like Starbucks.  Use in conjunction with '
+                        '!list to help you identify the gym_id.\n'
+                        '`!updategymname 55 <new name of gym>`\n'
+                        'Example: `!updategymname 55 "Starbucks inside Vons"`\n\n'
                         '**Delete Raids**\n'
                         'This will allow you to delete a raid by gym id\n'
                         '`!deleteraid <gym_id>`\n'
