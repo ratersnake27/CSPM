@@ -2,20 +2,22 @@ import MySQLdb
 import discord
 from discord.ext import commands
 import asyncio
-from pokemonlist import pokemon, pokejson
+from pokemonlist import pokemon, pokejson, pokejson_by_name
 from config import bot_channel, token, host, user, password, database, website, log_channel
 import datetime
 import calendar
 import time
 
-bot = commands.Bot(command_prefix = '!')#set prefix to !
+bot = commands.Bot(command_prefix = '!') #set prefix to !
 
 database = MySQLdb.connect(host,user,password,database)
 
 cursor = database.cursor()
 
 def find_pokemon_id(name):
-    if name == 'Nidoran-F':
+    if name == 'Egg':
+        return 0
+    elif name == 'Nidoran-F':
         return 29
     elif name == 'Nidoran-M':
         return 32
@@ -26,12 +28,7 @@ def find_pokemon_id(name):
     elif name == 'Mime-Jr':
         return 439
     else:
-        name = name.split('-')[0]
-        for k in pokejson.keys():
-            v = pokejson[k]
-            if v == name:
-                return int(k)
-        return 0
+        return int(pokejson_by_name.get(name, 0))
 
 def get_time(minute):
     future = datetime.datetime.utcnow() + datetime.timedelta(minutes=minute)
@@ -39,8 +36,8 @@ def get_time(minute):
 
 def get_team_id(raw_team):
     gym_team_id = 0
-    
-    if raw_team.isnumeric and ( raw_team >= '0' ) and ( raw_team <= '3' ):
+
+    if raw_team.isnumeric() and ( raw_team >= '0' ) and ( raw_team <= '3' ):
         gym_team_id = int(raw_team)
     else:
         team_name = str(raw_team).capitalize()
@@ -55,7 +52,6 @@ def get_team_id(raw_team):
     return gym_team_id
 
 def get_team_name(team_id):
-    print('Team id is: ' + str(team_id))
     if ( team_id == 1 ):
         team_name = 'Mystic'
     elif ( team_id == 2 ):
@@ -64,7 +60,6 @@ def get_team_name(team_id):
         team_name = 'Instinct'
     else:
         team_name = 'Unknown'
-    print('team_name is: ' + str(team_name))
     return team_name
 
 print('CSPM Started.')
@@ -78,7 +73,7 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
         remaining_time = get_time(int(raw_time_remaining))
         current_time = datetime.datetime.utcnow()
         gym_team_id = get_team_id(raw_team)
-        
+
         try:
             if raw_gym_name.isnumeric():
                 cursor.execute("SELECT id, name, lat, lon FROM forts WHERE id LIKE '%" + str(raw_gym_name) + "%';")
@@ -93,7 +88,7 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                 cursor.execute("SELECT id, fort_id, time_end FROM raids WHERE fort_id='" + str(gym_id) + "' AND time_end>'" + str(calendar.timegm(current_time.timetuple())) + "';")
                 raid_data = cursor.fetchall()
                 raid_count = cursor.rowcount
- 
+
                 if (raid_count):
                     raid_id = raid_data[0][0]
                     raid_fort_id = raid_data[0][1]
@@ -108,7 +103,7 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
 
             if ( pokemon_name == "Egg" ):
                 est_end_time = remaining_time + 2700
-                
+
                 if (raid_count):
                     cursor.execute("UPDATE raids SET level='" + str(raw_raid_level) + "', time_battle='" + str(remaining_time) + "', time_end='" + str(est_end_time) + "' WHERE id='" + str(raid_id)+ "';")
                     await bot.say('Updated **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '**\nGym: **' + str(gym_id) + ': ' + str(gym_name) + ' Gym**\n' +
@@ -144,8 +139,8 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
             cursor.execute("INSERT INTO fort_sightings(fort_id, team, last_modified) VALUES (" + str(gym_id) + ", " + str(gym_team_id) + ", " + str(calendar.timegm(current_time.timetuple())) + ");")
 
             database.commit()
-            
-            
+
+
             if ( pokemon_name == "Egg" ):
                 await bot.send_message(discord.Object(id=log_channel), str(ctx.message.author.name) + ' reported a **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '** with about ' + str(raw_time_remaining) + ' minutes left.\nGym: **' + str(gym_name) + ' Gym**\nHatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**\nTeam: **' + str(get_team_name(gym_team_id))+ '**') and print(str(ctx.message.author.name) + ' reported a ' + str(pokemon_name) + ' raid at ' + str(gym_name) + ' gym with ' + str(raw_time_remaining) + ' minutes left.')
             else:
@@ -196,10 +191,10 @@ async def handle_missing_arg(ctx, error):
     except:
         database.rollback()
         await bot.say('No gyms found OR too many to list.  Try narrowing down your search.')
-  
+
 @bot.command(pass_context=True)
 async def spawn(ctx, arg, arg2, arg3):
-    if ctx and ctx.message.channel.id == str(bot_channel) and arg in pokemon:
+    if ctx and ctx.message.channel.id == str(bot_channel) and arg.lower() in pokemon:
         pokemon_id = find_pokemon_id(str(arg).capitalize())
         time = get_time(15)
         try:
