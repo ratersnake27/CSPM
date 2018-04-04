@@ -3,10 +3,11 @@ import discord
 from discord.ext import commands
 import asyncio
 from pokemonlist import pokemon, pokejson, pokejson_by_name
-from config import bot_channel, token, host, user, password, database, website, log_channel, instance_id
+from config import bot_channel, token, host, user, password, database, website, log_channel, instance_id, legendary_id
 import datetime
 import calendar
 import time
+import threading
 
 bot = commands.Bot(command_prefix = '!') #set prefix to !
 
@@ -15,6 +16,7 @@ database = MySQLdb.connect(host,user,password,database)
 cursor = database.cursor()
 
 print('CSPM Started for ' + str(instance_id))
+
 
 def find_pokemon_id(name):
     if name == 'Egg':
@@ -85,6 +87,49 @@ def get_egg_url(egg_level):
 
     return egg_url
 
+async def incubate(ctx, gym_id, remaining_time):
+    channel = discord.Object(id=bot_channel)
+    current_time = datetime.datetime.utcnow()
+    current_epoch_time = calendar.timegm(current_time.timetuple())
+    sleep_time = remaining_time - current_epoch_time
+    await bot.send_message(channel,'*Incubating Egg at Gym ID: ' + str(gym_id) + '. Will auto hatch in **' + str(sleep_time) + '** seconds.*')
+    print('Auto-incubating Legendary egg at Gym ID: ' + str(gym_id) + '. Will auto hatch in ' + str(sleep_time) + ' seconds.')
+
+    # Let's pause this thread until hatch time
+    await asyncio.sleep(sleep_time)
+
+    # Need to check if egg still exists before updating it and posting.  Otherwise, someone may have deleted it.
+    cursor.execute("SELECT id FROM raids WHERE fort_id='" + str(gym_id)+ "' AND time_end>'" + str(current_epoch_time) + "';")
+    raid_check = cursor.rowcount
+    if ( raid_check == 1 ):
+        cursor.execute("UPDATE raids SET pokemon_id='" + str(legendary_id) + "' WHERE fort_id='" + str(gym_id)+ "' AND time_end>'" + str(current_epoch_time) + "';")
+        database.commit()
+
+        cursor.execute("SELECT f.id, f.name, f.lat, f.lon, fs.team, r.level, r.pokemon_id, r.time_end FROM forts f JOIN raids r ON f.id=r.fort_id JOIN fort_sightings fs ON f.id = fs.fort_id WHERE f.id='" + str(gym_id) + "' AND r.time_end>'" + str(current_epoch_time) + "';")
+        raid_data = cursor.fetchall()
+
+        gym_id, gym_name, gym_lat, gym_lon, gym_team_id, raid_level, raid_pokemon_id, time_end = raid_data[0]
+        await bot.send_message(channel,'Updated **Level ' + str(raid_level) + ' Egg to ' + str(pokejson[str(raid_pokemon_id)]) + ' Raid' + '**' +
+                      '\nGym: **' + str(gym_id) + ': ' + str(gym_name) + ' Gym' + '**' +
+                      '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
+                      '\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
+        print('Legendary egg at Gym ID: ' + str(gym_id) + ' hatched into ' + str(pokejson[str(raid_pokemon_id)]))
+
+        raid_embed=discord.Embed(
+            title='**Level ' + str(raid_level) + ' ' + str(pokejson[str(raid_pokemon_id)]) + ' Raid**',
+            description='Gym: **' + str(gym_name) + ' Gym**' +
+                        '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(time_end))) + '**' +
+                        '\nTeam: **' + str(get_team_name(gym_team_id))+ '**' +
+                        '\nReported by: __' + str(ctx.message.author.name) + '__' +
+                        '\n\nhttps://www.google.com/maps?q=loc:' + str(gym_lat) + ',' + str(gym_lon),
+            color=team_color(gym_team_id)
+        )
+        thumbnail_image_url = 'https://bitbucket.org/anzmap/sprites/raw/HEAD/' + str(raid_pokemon_id) + '.png'
+        raid_embed.set_thumbnail(url=thumbnail_image_url)
+        await bot.send_message(discord.Object(id=log_channel), embed=raid_embed)
+    else:
+        print('Auto-hatch cancelled. Egg was not found, possibly deleted before hatch.')
+
 #raid function
 @bot.command(pass_context=True)
 async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_remaining, raw_team):
@@ -126,7 +171,7 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
 
             if ( pokemon_name == "Egg" ):
                 est_end_time = remaining_time + 2700
-
+                
                 if (raid_count):
                     cursor.execute("UPDATE raids SET level='" + str(raw_raid_level) + "', time_battle='" + str(remaining_time) + "', time_end='" + str(est_end_time) + "' WHERE id='" + str(raid_id)+ "';")
                     await bot.say('Updated **Level ' + str(raw_raid_level) + ' ' + str(pokemon_name) + '**' +
@@ -135,6 +180,10 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                                   '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**' +
                                   '\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
                 else:
+                    # Setup task to automatically hatch Legendary egg
+                    if ( raw_raid_level == '5' ):
+                        bot.loop.create_task(incubate(ctx, gym_id, remaining_time))
+                    
                     cursor.execute("INSERT INTO raids("
                                    "id, external_id, fort_id , level, "
                                    "pokemon_id, move_1, move_2, time_spawn, "
@@ -147,7 +196,7 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                                   '\nGym: **' + str(gym_name) + ' Gym' + '**' +
                                   '\nHatches: **' + str(time.strftime('%I:%M %p',  time.localtime(remaining_time))) + '**' +
                                   '\nRaid Ends: **' + str(time.strftime('%I:%M %p',  time.localtime(est_end_time))) + '**' +
-                                  '\nTime Left: **' + str(raw_time_remaining) + ' minutes**' +
+                                  '\nTime Left Until Hatch: **' + str(raw_time_remaining) + ' minutes**' +
                                   '\nTeam: **' + str(get_team_name(gym_team_id)) + '**')
                     raid_embed=discord.Embed(
                         title='**Level ' + str(raw_raid_level) + ' Egg**',
@@ -163,7 +212,7 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
                     raid_embed.set_thumbnail(url=thumbnail_image_url)
                     await bot.send_message(discord.Object(id=log_channel), embed=raid_embed)
                     
-                    print(str(ctx.message.author.name) + ' reported a ' + str(pokemon_name) + ' at ' + str(gym_name) + ' gym with ' + str(raw_time_remaining) + ' minutes left.')
+                    print(str(ctx.message.author.name) + ' reported a ' + str(pokemon_name) + ' at ' + str(gym_id) +': ' + str(gym_name) + ' gym with ' + str(raw_time_remaining) + ' minutes left.')
             else:
                 # Update Egg to a hatched Raid Boss
                 if (raid_count):
@@ -235,6 +284,7 @@ async def raid(ctx, raw_gym_name, raw_pokemon_name, raw_raid_level, raw_time_rem
             else:
                 await bot.say('Unsuccesful add to the map. !raid "*gym_name*" *pokemon_name* *raid_level* *minutes_left*\n')
 
+
 @raid.error
 async def handle_missing_raid_arg(ctx, error):
     await bot.say('Unsuccesful add to the map. Missing arguments. !raid  "*gym_name*"  *pokemon_name*  *raid_level*  *minutes_left*  *gym_team*\n')
@@ -294,23 +344,21 @@ async def deleteraid(ctx, fort_id):
                 gym_name = gym_data[0][1]
                 gym_lat = gym_data[0][2]
                 gym_lon = gym_data[0][3]
-                
+
                 # Gym id is valid and returned 1 result
                 if ( count == 1 ):
-                    cursor.execute("SELECT fort_id, level, pokemon_id, time_battle, time_end FROM raids WHERE fort_id='" + str(fort_id) + "' AND time_end>'" + str(calendar.timegm(current_time.timetuple())) + "';")
+                    cursor.execute("SELECT r.fort_id, r.level, r.pokemon_id, r.time_battle, r.time_end, fs.team FROM raids r JOIN fort_sightings fs ON r.fort_id = fs.fort_id WHERE r.fort_id='" + str(fort_id) + "' AND r.time_end>'" + str(calendar.timegm(current_time.timetuple())) + "';")
                     raid_data = cursor.fetchall()
                     raid_count = cursor.rowcount
                     
-                    raid_fort_id = raid_data[0][0]
-                    raid_level = raid_data[0][1]
-                    raid_pokemon_id = raid_data[0][2]
-                    raid_time_battle = raid_data[0][3]
-                    raid_time_end = raid_data[0][4]
+                    raid_fort_id, raid_level, raid_pokemon_id, raid_time_battle, raid_time_end, raid_gym_team = raid_data[0]
 
                     if ( raid_pokemon_id == 0 ):
                         raid_pokemon_name = 'Unknown (Egg)'
+                        thumbnail_image_url = get_egg_url(raid_level)
                     else:
                         raid_pokemon_name = pokejson[str(raid_pokemon_id)]
+                        thumbnail_image_url = 'https://bitbucket.org/anzmap/sprites/raw/HEAD/' + str(raid_pokemon_id) + '.png'
 
                     await bot.say('**Deleted the following raid**' +
                                   '\nGym: **' + str(fort_id) + ': ' + str(gym_name) + ' Gym**' +
@@ -320,6 +368,18 @@ async def deleteraid(ctx, fort_id):
                                   '\nEnd Time: **' + str(time.strftime('%I:%M %p',  time.localtime(raid_time_end))) + '**')
                     
                     cursor.execute("DELETE FROM raids WHERE fort_id='" + str(fort_id) + "' AND time_end>'" + str(calendar.timegm(current_time.timetuple())) + "';")
+
+                    raid_embed=discord.Embed(
+                        title='~~Level ' + str(raid_level) + ' ' + str(raid_pokemon_name).capitalize() + ' Raid~~ **RAID DELETED**',
+                        description='Gym: ~~' + str(gym_name) + ' Gym~~' +
+                                    '\nRaid Ends: ~~' + str(time.strftime('%I:%M %p',  time.localtime(raid_time_end))) + '~~' +
+                                    '\nTeam: ~~' + str(get_team_name(raid_gym_team))+ '~~' +
+                                    '\nDeleted by: __' + str(ctx.message.author.name) + '__',
+                        color=team_color(raid_gym_team)
+                    )
+                    raid_embed.set_thumbnail(url=thumbnail_image_url)
+                    await bot.send_message(discord.Object(id=log_channel), embed=raid_embed)
+
                     print(str(ctx.message.author.name) + ' deleted the Level ' + str(raid_level) + ' Raid at the ' + str(fort_id) + ': ' + str(gym_name) + ' Gym.')
                 else:
                     await bot.say('Gym ID provided is not valid.')
@@ -421,30 +481,30 @@ async def helpme(ctx):
     if ctx and ctx.message.channel.id == str(bot_channel):
         help_embed=discord.Embed(
             title='PoGoSD CSPM Help',
-            content='**Mapping Raids:**\n'
-                        'To add a raid to the live map, use the following command:\n'
-                        '`!raid <gym_name or gym_id> <pokemon_name> <raid_level> <minutes remaining> <gym team>`\n'
-                        'Example: `!raid "Fave Bird Mural" Lugia 5 45 Instinct`\n\n'
-                        'Example: `!raid mural lugia 5 45 inst`\n\n'
-                        'Example: `!raid 55 lugia 5 45 yel`\n\n'
-                        '*To see raids that are crowdsourced, please make sure you tick the raids option in layers (top right)*\n\n'
-                        '**List Gyms:**\n'
-                        'This will help you search for gym names and ids:\n'
-                        '`!list <search_string or number>`\n'
-                        'Example: `!list 55`\n'
-                        'Result: `55: Name of a Gym`\n\n'
-                        '**Modify Gym Name**\n'
-                        'Use this command to modify a gym name to help with identifying gyms with the same name, like Starbucks.  Use in conjunction with '
-                        '!list to help you identify the gym_id.\n'
-                        '`!updategymname 55 <new name of gym>`\n'
-                        'Example: `!updategymname 55 "Starbucks inside Vons"`\n\n'
-                        '**Delete Raids**\n'
-                        'This will allow you to delete a raid by gym id\n'
-                        '`!deleteraid <gym_id>`\n'
-                        'Example: `!deleteraid 55`\n\n'
-                        '**Show Active Raids**\n'
-                        'This will allow you to list all active raids. Which is useful to identify a raid you may need to delete.\n'
-                        '`!activeraids`',
+            description='**Mapping Raids:**\n'
+                    'To add a raid to the live map, use the following command:\n'
+                    '`!raid <gym_name or gym_id> <pokemon_name> <raid_level> <minutes remaining> <gym team>`\n'
+                    'Example: `!raid "Fave Bird Mural" Lugia 5 45 Instinct`\n'
+                    'Example: `!raid mural lugia 5 45 inst`\n'
+                    'Example: `!raid 55 lugia 5 45 yel`\n\n'
+                    '*Legendary Eggs will automatically hatch if not manually updated.*\n\n'
+                    '**List Gyms:**\n'
+                    'This will help you search for gym names and ids:\n'
+                    '`!list <search_string or number>`\n'
+                    'Example: `!list 55`\n'
+                    'Result: `55: Name of a Gym`\n\n'
+                    '**Modify Gym Name**\n'
+                    'Use this command to modify a gym name to help with identifying gyms with the same name, like Starbucks.  Use in conjunction with '
+                    '!list to help you identify the gym_id.\n'
+                    '`!updategymname 55 <new name of gym>`\n'
+                    'Example: `!updategymname 55 "Starbucks inside Vons"`\n\n'
+                    '**Delete Raids**\n'
+                    'This will allow you to delete a raid by gym id\n'
+                    '`!deleteraid <gym_id>`\n'
+                    'Example: `!deleteraid 55`\n\n'
+                    '**Show Active Raids**\n'
+                    'This will allow you to list all active raids. Which is useful to identify a raid you may need to delete.\n'
+                    '`!activeraids`',
             color=3447003
         )
         await bot.say(embed=help_embed)
